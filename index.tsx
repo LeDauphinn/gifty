@@ -40,24 +40,24 @@ const THEMES = [
 ];
 
 const MODES = {
-  fast: { 
-    maxQuestions: 5, 
-    optionsCount: 12, 
-    label: "Fast", 
+  fast: {
+    maxQuestions: 5,
+    optionsCount: 12,
+    label: "Fast",
     sub: "Max 5 questions",
     desc: "In a rush? Get broad suggestions quickly based on key details."
   },
-  balanced: { 
-    maxQuestions: 15, 
-    optionsCount: 8, 
-    label: "Balanced", 
+  balanced: {
+    maxQuestions: 15,
+    optionsCount: 8,
+    label: "Balanced",
     sub: "Max 15 questions",
     desc: "The sweet spot. A smart mix of detail and speed for great results."
   },
-  deep: { 
-    maxQuestions: 100, 
-    optionsCount: 12, 
-    label: "Deep Dive", 
+  deep: {
+    maxQuestions: 100,
+    optionsCount: 12,
+    label: "Deep Dive",
     sub: "Up to 100 questions",
     desc: "An exhaustive search. We'll keep asking until we find the perfect match."
   }
@@ -97,10 +97,10 @@ interface StepResponse {
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function generateContentWithRetry(
-  modelName: string, 
-  prompt: string, 
-  config: any, 
-  retries = 3, 
+  modelName: string,
+  prompt: string,
+  config: any,
+  retries = 3,
   backoff = 1000
 ): Promise<any> {
   try {
@@ -163,7 +163,7 @@ const App = () => {
   const [themeIndex, setThemeIndex] = useState(0);
   const [customInput, setCustomInput] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
-  const [lastAction, setLastAction] = useState<() => void>(() => {});
+  const [lastAction, setLastAction] = useState<() => void>(() => { });
 
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -182,7 +182,7 @@ const App = () => {
   // GSAP Animations
   useLayoutEffect(() => {
     const theme = THEMES[themeIndex];
-    
+
     // Animate Background
     if (bgRef.current) {
       gsap.to(bgRef.current, {
@@ -205,7 +205,7 @@ const App = () => {
     if (contentRef.current) {
       const staggerItems = contentRef.current.querySelectorAll('.stagger-in');
       if (staggerItems.length > 0) {
-        gsap.fromTo(staggerItems, 
+        gsap.fromTo(staggerItems,
           { y: 20, opacity: 0 },
           { y: 0, opacity: 1, duration: 0.6, stagger: 0.08, ease: "power3.out", clearProps: "transform" }
         );
@@ -237,10 +237,10 @@ const App = () => {
   const handleStart = async (selectedMode: Mode) => {
     setMode(selectedMode);
     setAppState('loading');
-    
+
     // Initial Prompt
     const prompt = "Start the session. Ask 'Who are you buying this gift for?'.";
-    
+
     const action = () => fetchNextStep(selectedMode, [], prompt);
     setLastAction(() => action);
     await action();
@@ -274,7 +274,7 @@ const App = () => {
     try {
       const modeConfig = MODES[currentMode];
       const questionCount = currentHistory.filter(h => h.role === 'model').length;
-      
+
       const systemInstruction = `
         You are Gifty, a sophisticated gift recommendation assistant using Gemini.
         Your goal is to discover the perfect gift through a series of thoughtful questions.
@@ -304,7 +304,7 @@ const App = () => {
       }
 
       const response = await generateContentWithRetry(
-        MODEL_NAME, 
+        MODEL_NAME,
         userPrompt,
         {
           systemInstruction: systemInstruction,
@@ -379,28 +379,28 @@ const App = () => {
 
   return (
     <div ref={bgRef} style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', transition: 'background-color 0s', position: 'relative' }}>
-      
+
       {/* Top Bar */}
-      <div style={{ 
-        width: '100%', 
-        maxWidth: '900px', 
-        padding: '2rem', 
-        display: 'flex', 
-        justifyContent: 'space-between', 
+      <div style={{
+        width: '100%',
+        maxWidth: '900px',
+        padding: '2rem',
+        display: 'flex',
+        justifyContent: 'space-between',
         alignItems: 'center',
         zIndex: 10
       }}>
-        <h1 style={{ 
-          fontSize: '2rem', 
-          fontWeight: 800, 
-          letterSpacing: '-1px', 
-          margin: 0, 
-          color: theme.text 
+        <h1 style={{
+          fontSize: '2rem',
+          fontWeight: 800,
+          letterSpacing: '-1px',
+          margin: 0,
+          color: theme.text
         }}>
-          gifty<span style={{color: theme.accent}}>.</span>
+          gifty<span style={{ color: theme.accent }}>.</span>
         </h1>
-        
-        <button 
+
+        <button
           onClick={handleReset}
           aria-label="Restart"
           style={{
@@ -421,20 +421,20 @@ const App = () => {
 
       <div ref={containerRef} style={{ width: '100%', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <div ref={contentRef} style={{ width: '100%', maxWidth: '800px', padding: '0 2rem 4rem 2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          
+
           {appState === 'intro' && (
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <h2 className="stagger-in" style={{ 
-                marginBottom: '3rem', 
-                textAlign: 'center', 
-                fontWeight: 300, 
+              <h2 className="stagger-in" style={{
+                marginBottom: '3rem',
+                textAlign: 'center',
+                fontWeight: 300,
                 fontSize: '1.5rem',
                 opacity: 0.8,
                 maxWidth: '500px'
               }}>
                 Tell us a little about who you're shopping for, and we'll handle the rest.
               </h2>
-              
+
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem', width: '100%' }}>
                 {(Object.keys(MODES) as Mode[]).map((m) => (
                   <button
@@ -458,17 +458,17 @@ const App = () => {
                       gsap.to(e.currentTarget, { y: 0, boxShadow: '0 4px 12px rgba(0,0,0,0.06)', duration: 0.1 });
                     }}
                   >
-                    <span style={{ 
-                      fontSize: '1.25rem', 
-                      fontWeight: 700, 
+                    <span style={{
+                      fontSize: '1.25rem',
+                      fontWeight: 700,
                       marginBottom: '0.25rem',
                       color: theme.primary
                     }}>
                       {MODES[m].label}
                     </span>
-                    <span style={{ 
-                      fontSize: '0.85rem', 
-                      fontWeight: 600, 
+                    <span style={{
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
                       marginBottom: '1rem',
                       opacity: 0.6,
                       textTransform: 'uppercase',
@@ -476,9 +476,9 @@ const App = () => {
                     }}>
                       {MODES[m].sub}
                     </span>
-                    <p style={{ 
-                      fontSize: '0.95rem', 
-                      opacity: 0.8, 
+                    <p style={{
+                      fontSize: '0.95rem',
+                      opacity: 0.8,
                       lineHeight: '1.5',
                       margin: 0
                     }}>
@@ -492,12 +492,12 @@ const App = () => {
 
           {appState === 'loading' && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '40vh' }}>
-              <div className="spinner" style={{ 
-                width: '50px', 
-                height: '50px', 
-                border: `3px solid ${theme.secondary}`, 
-                borderTop: `3px solid ${theme.primary}`, 
-                borderRadius: '50%' 
+              <div className="spinner" style={{
+                width: '50px',
+                height: '50px',
+                border: `3px solid ${theme.secondary}`,
+                borderTop: `3px solid ${theme.primary}`,
+                borderRadius: '50%'
               }}></div>
               <style>{`
                 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -517,7 +517,7 @@ const App = () => {
               <p style={{ maxWidth: '400px', opacity: 0.8, marginBottom: '2rem', lineHeight: '1.6' }}>
                 {errorMsg}
               </p>
-              <button 
+              <button
                 onClick={handleRetry}
                 style={{
                   ...primaryBtnStyle,
@@ -536,21 +536,21 @@ const App = () => {
 
           {appState === 'question' && data && (
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <h2 className="stagger-in" style={{ 
-                fontSize: '2.5rem', 
-                textAlign: 'center', 
-                marginBottom: '3rem', 
+              <h2 className="stagger-in" style={{
+                fontSize: '2.5rem',
+                textAlign: 'center',
+                marginBottom: '3rem',
                 maxWidth: '90%',
                 fontWeight: 600,
                 lineHeight: 1.2
               }}>
                 {data.question}
               </h2>
-              
-              <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', 
-                gap: '1rem', 
+
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                gap: '1rem',
                 width: '100%',
                 maxWidth: '800px',
                 marginBottom: '3rem'
@@ -583,9 +583,9 @@ const App = () => {
                 ))}
               </div>
 
-              <form 
-                className="stagger-in" 
-                onSubmit={handleCustomSubmit} 
+              <form
+                className="stagger-in"
+                onSubmit={handleCustomSubmit}
                 style={{ width: '100%', maxWidth: '500px', position: 'relative' }}
               >
                 <input
@@ -598,17 +598,17 @@ const App = () => {
                     padding: '1.25rem 3.5rem 1.25rem 1.5rem',
                     borderRadius: '50px',
                     border: 'none',
-                    backgroundColor: 'rgba(255,255,255,0.4)', // Slightly transparent
+                    backgroundColor: theme.secondary,
                     boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)',
                     color: theme.text,
                     fontSize: '1rem',
                     outline: 'none',
                     transition: 'background-color 0.1s'
                   }}
-                  onFocus={(e) => e.target.style.backgroundColor = 'rgba(255,255,255,0.8)'}
-                  onBlur={(e) => e.target.style.backgroundColor = 'rgba(255,255,255,0.4)'}
+                  onFocus={(e) => gsap.to(e.target, { filter: 'brightness(1.1)', duration: 0.2 })}
+                  onBlur={(e) => gsap.to(e.target, { filter: 'brightness(1)', duration: 0.2 })}
                 />
-                <button 
+                <button
                   type="submit"
                   aria-label="Submit"
                   style={{
@@ -646,23 +646,23 @@ const App = () => {
                 Tap a bubble to shop.
               </p>
 
-              <div style={{ 
-                width: '100%', 
-                display: 'flex', 
-                flexWrap: 'wrap', 
-                gap: '1.5rem', 
+              <div style={{
+                width: '100%',
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '1.5rem',
                 marginBottom: '3rem',
-                justifyContent: 'center' 
+                justifyContent: 'center'
               }}>
                 {data.recommendations?.map((gift, idx) => {
                   const retailer = RETAILERS[idx % RETAILERS.length];
                   return (
-                    <a 
-                      key={idx} 
-                      href={retailer.url(gift)} 
+                    <a
+                      key={idx}
+                      href={retailer.url(gift)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="stagger-in wiggle-bubble" 
+                      className="stagger-in wiggle-bubble"
                       style={{
                         ...cardStyle,
                         padding: '1.2rem 2rem',
@@ -677,10 +677,10 @@ const App = () => {
                         whiteSpace: 'nowrap'
                       }}
                       onMouseEnter={(e) => {
-                         gsap.to(e.currentTarget, { scale: 1.1, backgroundColor: theme.primary, color: theme.bg, duration: 0.2 });
+                        gsap.to(e.currentTarget, { scale: 1.1, backgroundColor: theme.primary, color: theme.bg, duration: 0.2 });
                       }}
                       onMouseLeave={(e) => {
-                         gsap.to(e.currentTarget, { scale: 1, backgroundColor: theme.secondary, color: theme.text, duration: 0.2 });
+                        gsap.to(e.currentTarget, { scale: 1, backgroundColor: theme.secondary, color: theme.text, duration: 0.2 });
                       }}
                     >
                       {gift}
