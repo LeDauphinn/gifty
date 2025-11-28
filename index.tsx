@@ -39,30 +39,6 @@ const THEMES = [
   { bg: "#000000", text: "#e5e5e5", primary: "#bb86fc", secondary: "#1f1f1f", accent: "#03dac6" }
 ];
 
-const MODES = {
-  fast: {
-    maxQuestions: 5,
-    optionsCount: 12,
-    label: "Fast",
-    sub: "Max 5 questions",
-    desc: "In a rush? Get broad suggestions quickly based on key details."
-  },
-  balanced: {
-    maxQuestions: 15,
-    optionsCount: 8,
-    label: "Balanced",
-    sub: "Max 15 questions",
-    desc: "The sweet spot. A smart mix of detail and speed for great results."
-  },
-  deep: {
-    maxQuestions: 100,
-    optionsCount: 12,
-    label: "Deep Dive",
-    sub: "Up to 100 questions",
-    desc: "An exhaustive search. We'll keep asking until we find the perfect match."
-  }
-};
-
 const RETAILERS = [
   { name: 'Trendyol', url: (q: string) => `https://www.trendyol.com/sr?q=${encodeURIComponent(q)}` },
   { name: 'Hepsiburada', url: (q: string) => `https://www.hepsiburada.com/ara?q=${encodeURIComponent(q)}` },
@@ -77,7 +53,6 @@ const MODEL_NAME = 'gemini-2.5-flash';
 
 // --- Types ---
 
-type Mode = 'deep' | 'balanced' | 'fast';
 type AppState = 'intro' | 'loading' | 'question' | 'results' | 'error';
 
 interface HistoryItem {
@@ -130,6 +105,14 @@ const RefreshIcon = () => (
   </svg>
 );
 
+const InfoIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"></circle>
+    <line x1="12" y1="16" x2="12" y2="12"></line>
+    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+  </svg>
+);
+
 const ArrowRightIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -157,17 +140,18 @@ const ExternalLinkIcon = () => (
 
 const App = () => {
   const [appState, setAppState] = useState<AppState>('intro');
-  const [mode, setMode] = useState<Mode>('balanced');
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [data, setData] = useState<StepResponse | null>(null);
   const [themeIndex, setThemeIndex] = useState(0);
   const [customInput, setCustomInput] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [lastAction, setLastAction] = useState<() => void>(() => { });
+  const [showInfo, setShowInfo] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const bgRef = useRef<HTMLDivElement>(null);
+  const rainbowTrackRef = useRef<HTMLDivElement>(null);
 
   // --- Effects ---
 
@@ -216,7 +200,6 @@ const App = () => {
     if (appState === 'results') {
       const bubbles = document.querySelectorAll('.wiggle-bubble');
       bubbles.forEach((bubble) => {
-        // Randomize start times and parameters so they don't move in unison
         gsap.to(bubble, {
           rotation: "random(-3, 3)",
           x: "random(-3, 3)",
@@ -230,18 +213,31 @@ const App = () => {
       });
     }
 
+    // Infinite Rainbow Loop (Start Button)
+    if (rainbowTrackRef.current) {
+      // Kill existing tweens to prevent stacking if component re-renders
+      gsap.killTweensOf(rainbowTrackRef.current);
+
+      // Move from 0% to -50% (exactly one period of the duplicated gradient)
+      gsap.to(rainbowTrackRef.current, {
+        xPercent: -50,
+        duration: 20, // Very slow
+        ease: "none",
+        repeat: -1
+      });
+    }
+
   }, [themeIndex, appState, data, errorMsg]);
 
   // --- Logic ---
 
-  const handleStart = async (selectedMode: Mode) => {
-    setMode(selectedMode);
+  const handleStart = async () => {
     setAppState('loading');
 
     // Initial Prompt
     const prompt = "Start the session. Ask 'Who are you buying this gift for?'.";
 
-    const action = () => fetchNextStep(selectedMode, [], prompt);
+    const action = () => fetchNextStep([], prompt);
     setLastAction(() => action);
     await action();
   };
@@ -252,7 +248,7 @@ const App = () => {
     setCustomInput("");
     setErrorMsg("");
     setAppState('intro');
-    setThemeIndex(0); // Reset to first theme or keep random
+    setThemeIndex(0);
   };
 
   const handleAnswer = async (answer: string) => {
@@ -265,14 +261,13 @@ const App = () => {
     setAppState('loading');
     setCustomInput("");
 
-    const action = () => fetchNextStep(mode, newHistory, "");
+    const action = () => fetchNextStep(newHistory, "");
     setLastAction(() => action);
     await action();
   };
 
-  const fetchNextStep = async (currentMode: Mode, currentHistory: HistoryItem[], initialPrompt: string) => {
+  const fetchNextStep = async (currentHistory: HistoryItem[], initialPrompt: string) => {
     try {
-      const modeConfig = MODES[currentMode];
       const questionCount = currentHistory.filter(h => h.role === 'model').length;
 
       const systemInstruction = `
@@ -280,22 +275,21 @@ const App = () => {
         Your goal is to discover the perfect gift through a series of thoughtful questions.
         
         Mode Settings:
-        - Mode: ${currentMode}
-        - Max Questions: ${modeConfig.maxQuestions}
-        - Current Question: ${questionCount + 1}
-        - Required Option Count: ${modeConfig.optionsCount}
+        - Max Questions: 7
+        - Current Question Index: ${questionCount + 1}
         
         Instructions:
         1. LANGUAGE PROTOCOL: 
            - All 'question' and 'options' fields MUST be in ENGLISH.
            - The conversation must flow in English.
-        2. If starting, ask "Who are you buying this gift for?".
-        3. Progressively narrow down interests and personality.
-        4. STRICTLY PROHIBITED: Do not ask any questions about price, budget, or money. Assume budget is flexible.
-        5. Provide exactly ${modeConfig.optionsCount} concise, distinct answer options in ENGLISH.
-        6. If you have sufficient data OR Current Question >= Max Questions, set 'isFinal' to true and provide 6-10 curated recommendations.
-        7. If 'isFinal' is true, set 'question' to a concluding phrase in ENGLISH like "Here are some curated ideas." and keep options empty.
-        8. CRITICAL EXCEPTION - TURKISH OUTPUT: When 'isFinal' is true, the items in the 'recommendations' array MUST be specific gift product names translated into TURKISH. This is the ONLY place Turkish is allowed. This is required for search links on Turkish retailers. Example: Return "Kablosuz Kulaklık" (Turkish) instead of "Wireless Headphones".
+        2. If starting (History is empty), ask "Who are you buying this gift for?".
+        3. STRICT RULE: The second question (Question Index 2) MUST ask about the "Age Range" of the recipient.
+        4. Progressively narrow down interests and personality.
+        5. STRICTLY PROHIBITED: Do not ask any questions about price, budget, or money. Assume budget is flexible.
+        6. Provide 8-12 concise, distinct answer options in ENGLISH for every question.
+        7. If you have sufficient data OR Current Question >= 7, set 'isFinal' to true and provide 6-10 curated recommendations.
+        8. If 'isFinal' is true, set 'question' to a concluding phrase in ENGLISH like "Here are some curated ideas." and keep options empty.
+        9. CRITICAL EXCEPTION - TURKISH OUTPUT: When 'isFinal' is true, the items in the 'recommendations' array MUST be specific gift product names translated into TURKISH. This is the ONLY place Turkish is allowed. Example: Return "Kablosuz Kulaklık" instead of "Wireless Headphones".
       `;
 
       let userPrompt = initialPrompt;
@@ -380,6 +374,24 @@ const App = () => {
   return (
     <div ref={bgRef} style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', transition: 'background-color 0s', position: 'relative' }}>
 
+      <style>{`
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .spinner { animation: spin 0.8s ease-in-out infinite; }
+        
+        .rainbow-btn {
+          overflow: hidden;
+          position: relative;
+          z-index: 1;
+        }
+        
+        .rainbow-btn:hover {
+           transform: scale(1.05);
+           box-shadow: 0 12px 24px rgba(0,0,0,0.2);
+           color: #fff !important;
+           text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+      `}</style>
+
       {/* Top Bar */}
       <div style={{
         width: '100%',
@@ -390,103 +402,166 @@ const App = () => {
         alignItems: 'center',
         zIndex: 10
       }}>
-        <h1 style={{
-          fontSize: '2rem',
-          fontWeight: 800,
-          letterSpacing: '-1px',
-          margin: 0,
-          color: theme.text
-        }}>
+        <h1
+          onClick={handleReset}
+          style={{
+            fontSize: '2rem',
+            fontWeight: 800,
+            letterSpacing: '-1px',
+            margin: 0,
+            color: theme.text,
+            cursor: 'pointer',
+            userSelect: 'none'
+          }}>
           gifty<span style={{ color: theme.accent }}>.</span>
         </h1>
 
-        <button
-          onClick={handleReset}
-          aria-label="Restart"
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: theme.text,
-            cursor: 'pointer',
-            padding: '8px',
-            opacity: 0.6,
-            transition: 'opacity 0.1s'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-          onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
-        >
-          <RefreshIcon />
-        </button>
+        {appState !== 'intro' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div
+              style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
+              onMouseEnter={() => setShowInfo(true)}
+              onMouseLeave={() => setShowInfo(false)}
+            >
+              <div style={{
+                cursor: 'help',
+                opacity: 0.6,
+                color: theme.text,
+                transition: 'opacity 0.1s'
+              }}
+                onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
+              >
+                <InfoIcon />
+              </div>
+
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                marginTop: '10px',
+                backgroundColor: theme.text,
+                color: theme.bg,
+                padding: '10px 14px',
+                borderRadius: '12px',
+                fontSize: '0.85rem',
+                width: '200px',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                opacity: showInfo ? 1 : 0,
+                visibility: showInfo ? 'visible' : 'hidden',
+                transition: 'opacity 0.2s, visibility 0.2s',
+                zIndex: 20,
+                pointerEvents: 'none',
+                textAlign: 'center',
+                lineHeight: 1.4,
+                fontWeight: 500
+              }}>
+                Tip: Use the text box to combine options or add details.
+              </div>
+            </div>
+
+            <button
+              onClick={handleReset}
+              aria-label="Restart"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: theme.text,
+                cursor: 'pointer',
+                padding: '8px',
+                opacity: 0.6,
+                transition: 'opacity 0.1s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
+            >
+              <RefreshIcon />
+            </button>
+          </div>
+        )}
       </div>
 
       <div ref={containerRef} style={{ width: '100%', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <div ref={contentRef} style={{ width: '100%', maxWidth: '800px', padding: '0 2rem 4rem 2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
 
           {appState === 'intro' && (
-            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <h2 className="stagger-in" style={{
-                marginBottom: '3rem',
-                textAlign: 'center',
-                fontWeight: 300,
-                fontSize: '1.5rem',
-                opacity: 0.8,
-                maxWidth: '500px'
-              }}>
-                Tell us a little about who you're shopping for, and we'll handle the rest.
-              </h2>
+            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <div className="stagger-in" style={{ marginBottom: '2rem' }}>
+                <h2 style={{ fontSize: '2.5rem', fontWeight: 700, marginBottom: '1rem' }}>
+                  Find the Perfect Gift.
+                </h2>
+                <p style={{ fontSize: '1.2rem', opacity: 0.8, maxWidth: '600px', lineHeight: 1.6, margin: '0 auto' }}>
+                  Gifty asks you a few simple questions to understand who you're buying for.
+                  Within 7 steps, we'll curate a list of personalized recommendations just for you.
+                </p>
+              </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem', width: '100%' }}>
-                {(Object.keys(MODES) as Mode[]).map((m) => (
-                  <button
-                    key={m}
-                    className="stagger-in"
-                    onClick={() => handleStart(m)}
-                    style={{
-                      ...cardStyle,
-                      padding: '2rem',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'flex-start',
-                      textAlign: 'left',
-                      height: '100%'
-                    }}
-                    onMouseEnter={(e) => {
-                      gsap.to(e.currentTarget, { y: -5, boxShadow: '0 10px 20px rgba(0,0,0,0.1)', duration: 0.1 });
-                    }}
-                    onMouseLeave={(e) => {
-                      gsap.to(e.currentTarget, { y: 0, boxShadow: '0 4px 12px rgba(0,0,0,0.06)', duration: 0.1 });
-                    }}
-                  >
-                    <span style={{
-                      fontSize: '1.25rem',
-                      fontWeight: 700,
-                      marginBottom: '0.25rem',
-                      color: theme.primary
-                    }}>
-                      {MODES[m].label}
-                    </span>
-                    <span style={{
-                      fontSize: '0.85rem',
-                      fontWeight: 600,
-                      marginBottom: '1rem',
-                      opacity: 0.6,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px'
-                    }}>
-                      {MODES[m].sub}
-                    </span>
-                    <p style={{
-                      fontSize: '0.95rem',
-                      opacity: 0.8,
-                      lineHeight: '1.5',
-                      margin: 0
-                    }}>
-                      {MODES[m].desc}
-                    </p>
-                  </button>
+              <div className="stagger-in" style={{
+                display: 'flex',
+                gap: '2rem',
+                justifyContent: 'center',
+                marginBottom: '3rem',
+                flexWrap: 'wrap'
+              }}>
+                {[
+                  { title: "Smart AI", desc: "Powered by Gemini" },
+                  { title: "Quick", desc: "Under 2 mins" }
+                ].map((item, i) => (
+                  <div key={i} style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                    padding: '1rem', border: `1px solid ${theme.secondary}`, borderRadius: '12px'
+                  }}>
+                    <span style={{ fontWeight: 700, color: theme.primary }}>{item.title}</span>
+                    <span style={{ fontSize: '0.9rem', opacity: 0.7 }}>{item.desc}</span>
+                  </div>
                 ))}
               </div>
+
+              <button
+                className="stagger-in rainbow-btn"
+                onClick={handleStart}
+                onMouseEnter={() => rainbowTrackRef.current && gsap.to(rainbowTrackRef.current, { opacity: 1, duration: 0.4 })}
+                onMouseLeave={() => rainbowTrackRef.current && gsap.to(rainbowTrackRef.current, { opacity: 0, duration: 0.4 })}
+                style={{
+                  ...primaryBtnStyle,
+                  padding: '1.5rem 4rem',
+                  fontSize: '1.25rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  letterSpacing: '0.5px',
+                  position: 'relative',
+                  transition: 'transform 0.3s, box-shadow 0.3s'
+                }}
+              >
+                {/* 
+                  GSAP Seamless Loop Structure:
+                  - Double width container moving left.
+                  - Scaled and rotated for "splash" effect.
+                  - Two identical gradients side-by-side.
+                */}
+                <div
+                  ref={rainbowTrackRef}
+                  style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    width: '300%', // Extra width for rotation safety
+                    height: '600%', // Massive height for rotation safety
+                    display: 'flex',
+                    opacity: 0, // Hidden by default, fades in on hover
+                    zIndex: 0,
+                    pointerEvents: 'none',
+                    transform: 'translate(-50%, -50%) rotate(-25deg)', // Centered and Angled
+                    backgroundColor: '#FF3B30', // Fix for gap line: match the start/end color of gradient
+                  }}
+                >
+                  <div style={{ flex: 1, background: 'linear-gradient(90deg, #FF3B30, #007AFF, #FFCC00, #FF2D55, #FF3B30)' }}></div>
+                  {/* Add negative margin to force overlap and prevent subpixel gap */}
+                  <div style={{ flex: 1, marginLeft: '-1px', background: 'linear-gradient(90deg, #FF3B30, #007AFF, #FFCC00, #FF2D55, #FF3B30)' }}></div>
+                </div>
+
+                <span style={{ position: 'relative', zIndex: 1 }}>Start Experience</span>
+              </button>
             </div>
           )}
 
@@ -499,10 +574,6 @@ const App = () => {
                 borderTop: `3px solid ${theme.primary}`,
                 borderRadius: '50%'
               }}></div>
-              <style>{`
-                @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-                .spinner { animation: spin 0.8s ease-in-out infinite; }
-              `}</style>
             </div>
           )}
 
@@ -553,7 +624,7 @@ const App = () => {
                 gap: '1rem',
                 width: '100%',
                 maxWidth: '800px',
-                marginBottom: '3rem'
+                marginBottom: '2rem'
               }}>
                 {data.options.map((option, idx) => (
                   <button
@@ -569,7 +640,10 @@ const App = () => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      textAlign: 'center'
+                      textAlign: 'center',
+                      backgroundColor: theme.secondary,
+                      color: theme.text,
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
                     }}
                     onMouseEnter={(e) => {
                       gsap.to(e.currentTarget, { scale: 1.02, backgroundColor: theme.primary, color: theme.bg, duration: 0.1 });
@@ -586,11 +660,11 @@ const App = () => {
               <form
                 className="stagger-in"
                 onSubmit={handleCustomSubmit}
-                style={{ width: '100%', maxWidth: '500px', position: 'relative' }}
+                style={{ width: '100%', maxWidth: '500px', position: 'relative', marginTop: '1rem' }}
               >
                 <input
                   type="text"
-                  placeholder="Type your own answer..."
+                  placeholder="Type to combine options or add details..."
                   value={customInput}
                   onChange={(e) => setCustomInput(e.target.value)}
                   style={{
