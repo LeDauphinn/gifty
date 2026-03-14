@@ -71,6 +71,95 @@ interface StepResponse {
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+const DEFAULT_AGE_OPTIONS = ['Under 12', '13-18', '19-25', '26-35', '36-50', '51-65', '66-75', '76-85', '86+', 'Not sure'];
+
+const RELATIONSHIP_FOLLOW_UPS: Record<string, { question: string; options: string[] }> = {
+  default: {
+    question: 'What is their approximate age range?',
+    options: DEFAULT_AGE_OPTIONS
+  },
+  partner: {
+    question: 'What is their approximate age range?',
+    options: ['18-24', '25-34', '35-44', '45-54', '55-64', '65+', 'Not sure']
+  },
+  parent: {
+    question: 'What is their approximate age range?',
+    options: ['36-50', '51-65', '66-75', '76-85', '86+', 'Not sure']
+  },
+  sibling: {
+    question: 'What is their approximate age range?',
+    options: ['Under 12', '13-18', '19-25', '26-35', '36-50', '51+', 'Not sure']
+  },
+  friend: {
+    question: 'What is their approximate age range?',
+    options: ['13-18', '19-25', '26-35', '36-50', '51-65', '66+', 'Not sure']
+  },
+  child: {
+    question: 'What is their approximate age range?',
+    options: ['Under 3', '4-7', '8-12', '13-18', '19-25', '26+', 'Not sure']
+  },
+  grandparent: {
+    question: 'What is their approximate age range?',
+    options: ['51-65', '66-75', '76-85', '86+', 'Not sure']
+  },
+  colleague: {
+    question: 'What is their approximate age range?',
+    options: ['21-29', '30-39', '40-49', '50-59', '60-69', '70+', 'Not sure']
+  },
+  teacher: {
+    question: 'What is their approximate age range?',
+    options: ['22-30', '31-40', '41-50', '51-60', '61-70', '71+', 'Not sure']
+  },
+  pet: {
+    question: "What is your pet's life stage?",
+    options: ['Baby / Puppy / Kitten', 'Young', 'Adult', 'Senior', 'Not sure']
+  },
+  boss: {
+    question: 'What is their approximate age range?',
+    options: ['25-34', '35-44', '45-54', '55-64', '65+', 'Not sure']
+  },
+  cousin: {
+    question: 'What is their approximate age range?',
+    options: ['Under 12', '13-18', '19-25', '26-35', '36-50', '51+', 'Not sure']
+  },
+  neighbor: {
+    question: 'What is their approximate age range?',
+    options: ['19-25', '26-35', '36-50', '51-65', '66-75', '76+', 'Not sure']
+  }
+};
+
+const normalizeRecipient = (recipient: string) => recipient.trim().toLowerCase();
+
+const inferRecipientProfile = (recipient: string) => {
+  const normalized = normalizeRecipient(recipient);
+
+  if (/(partner|wife|husband|spouse|boyfriend|girlfriend|fiance)/.test(normalized)) return 'partner';
+  if (/(grandparent|grandmother|grandfather|grandma|grandpa|nan|nana)/.test(normalized)) return 'grandparent';
+  if (/(parent|mother|father|mom|mum|dad)/.test(normalized)) return 'parent';
+  if (/(sibling|brother|sister)/.test(normalized)) return 'sibling';
+  if (/(friend|bestie|buddy|pal)/.test(normalized)) return 'friend';
+  if (/(child|kid|son|daughter)/.test(normalized)) return 'child';
+  if (/(colleague|coworker|co-worker|work friend)/.test(normalized)) return 'colleague';
+  if (/(teacher|professor|tutor|mentor)/.test(normalized)) return 'teacher';
+  if (/(pet|dog|cat|puppy|kitten|rabbit|hamster|bird)/.test(normalized)) return 'pet';
+  if (/(boss|manager|supervisor|lead)/.test(normalized)) return 'boss';
+  if (/(cousin)/.test(normalized)) return 'cousin';
+  if (/(neighbor|neighbour)/.test(normalized)) return 'neighbor';
+
+  return 'default';
+};
+
+const buildSecondStepForRecipient = (recipient: string): StepResponse => {
+  const profile = RELATIONSHIP_FOLLOW_UPS[inferRecipientProfile(recipient)] ?? RELATIONSHIP_FOLLOW_UPS.default;
+
+  return {
+    question: profile.question,
+    options: profile.options,
+    isFinal: false,
+    recommendations: []
+  };
+};
+
 async function generateContentWithRetry(
   modelName: string,
   prompt: string,
@@ -269,6 +358,15 @@ const App = () => {
   const fetchNextStep = async (currentHistory: HistoryItem[], initialPrompt: string) => {
     try {
       const questionCount = currentHistory.filter(h => h.role === 'model').length;
+      const isSecondStep = questionCount === 1;
+
+      if (isSecondStep) {
+        const recipient = currentHistory[currentHistory.length - 1]?.text ?? '';
+        const secondStep = buildSecondStepForRecipient(recipient);
+        setData(secondStep);
+        setAppState('question');
+        return;
+      }
 
       const systemInstruction = `
         You are Gifty, a sophisticated gift recommendation assistant using Gemini.
@@ -283,7 +381,7 @@ const App = () => {
            - All 'question' and 'options' fields MUST be in ENGLISH.
            - The conversation must flow in English.
         2. If starting (History is empty), ask "Who are you buying this gift for?".
-        3. STRICT RULE: The second question (Question Index 2) MUST ask about the "Age Range" of the recipient.
+        3. The second question about the recipient's age range or life stage is handled locally before later follow-up questions. Use the provided history and do not repeat that question.
         4. Progressively narrow down interests and personality.
         5. STRICTLY PROHIBITED: Do not ask any questions about price, budget, or money. Assume budget is flexible.
         6. Provide 8-12 concise, distinct answer options in ENGLISH for every question.
