@@ -889,68 +889,50 @@ const App = () => {
                 Perfect Picks
               </h2>
               <p className="stagger-in" style={{ marginBottom: '3rem', opacity: 0.7, fontSize: '1.2rem' }}>
-                Shopping in {countryConfig.name}. Search across {retailerNames}.
+                Tap a bubble to shop in {countryConfig.name}.
               </p>
 
               <div style={{
                 width: '100%',
-                display: 'grid',
-                gap: '1rem',
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '1.5rem',
                 marginBottom: '3rem',
-                justifyItems: 'stretch'
+                justifyContent: 'center'
               }}>
                 {data.recommendations?.map((gift, idx) => {
+                  const retailer = countryConfig.retailers[idx % countryConfig.retailers.length];
                   return (
-                    <div
+                    <a
                       key={`${gift}-${idx}`}
-                      className="stagger-in"
+                      href={buildRetailerSearchUrl(retailer.searchUrl, gift)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={`Open on ${retailer.name}`}
+                      className="stagger-in wiggle-bubble"
                       style={{
                         ...cardStyle,
-                        padding: '1.4rem',
-                        borderRadius: '24px',
+                        padding: '1.2rem 2rem',
+                        borderRadius: '50px',
                         display: 'flex',
-                        flexDirection: 'column',
-                        gap: '1rem',
-                        width: '100%'
+                        alignItems: 'center',
+                        fontSize: '1.1rem',
+                        fontWeight: 500,
+                        textDecoration: 'none',
+                        cursor: 'pointer',
+                        transformOrigin: 'center center',
+                        whiteSpace: 'nowrap'
+                      }}
+                      onMouseEnter={(e) => {
+                        gsap.to(e.currentTarget, { scale: 1.1, backgroundColor: theme.primary, color: theme.bg, duration: 0.2 });
+                      }}
+                      onMouseLeave={(e) => {
+                        gsap.to(e.currentTarget, { scale: 1, backgroundColor: theme.secondary, color: theme.text, duration: 0.2 });
                       }}
                     >
-                      <div style={{ fontSize: '1.15rem', fontWeight: 700, lineHeight: 1.4 }}>
-                        {gift}
-                      </div>
-
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-                        {countryConfig.retailers.map((retailer) => (
-                          <a
-                            key={`${gift}-${retailer.name}`}
-                            href={buildRetailerSearchUrl(retailer.searchUrl, gift)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="wiggle-bubble"
-                            style={{
-                              textDecoration: 'none',
-                              backgroundColor: theme.bg,
-                              color: theme.text,
-                              borderRadius: '999px',
-                              padding: '0.8rem 1rem',
-                              fontSize: '0.95rem',
-                              fontWeight: 600,
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
-                            }}
-                            onMouseEnter={(e) => {
-                              gsap.to(e.currentTarget, { scale: 1.05, backgroundColor: theme.primary, color: theme.bg, duration: 0.15 });
-                            }}
-                            onMouseLeave={(e) => {
-                              gsap.to(e.currentTarget, { scale: 1, backgroundColor: theme.bg, color: theme.text, duration: 0.15 });
-                            }}
-                          >
-                            {retailer.name}
-                            <ExternalLinkIcon />
-                          </a>
-                        ))}
-                      </div>
-                    </div>
+                      {gift}
+                      <ExternalLinkIcon />
+                    </a>
                   );
                 })}
               </div>
