@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleGenAI, Type } from "@google/genai";
 import gsap from 'gsap';
+import { COUNTRY_OPTIONS, DEFAULT_COUNTRY_CODE, buildRetailerSearchUrl, detectCountryCode, getCountryConfig } from './countryRetailers';
 
 // --- Configuration & Constants ---
 
@@ -70,6 +71,7 @@ interface StepResponse {
 // --- Helper Functions ---
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const COUNTRY_STORAGE_KEY = 'gifty-country-code';
 
 const DEFAULT_AGE_OPTIONS = ['Under 12', '13-18', '19-25', '26-35', '36-50', '51-65', '66-75', '76-85', '86+', 'Not sure'];
 
@@ -231,6 +233,7 @@ const App = () => {
   const [appState, setAppState] = useState<AppState>('intro');
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [data, setData] = useState<StepResponse | null>(null);
+  const [countryCode, setCountryCode] = useState(DEFAULT_COUNTRY_CODE);
   const [themeIndex, setThemeIndex] = useState(0);
   const [customInput, setCustomInput] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
@@ -241,8 +244,28 @@ const App = () => {
   const contentRef = useRef<HTMLDivElement>(null);
   const bgRef = useRef<HTMLDivElement>(null);
   const rainbowTrackRef = useRef<HTMLDivElement>(null);
+  const countryConfig = getCountryConfig(countryCode);
+  const retailerNames = countryConfig.retailers.map((retailer) => retailer.name).join(', ');
 
   // --- Effects ---
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const storedCountryCode = window.localStorage.getItem(COUNTRY_STORAGE_KEY);
+    const resolvedCountryCode = storedCountryCode || detectCountryCode();
+    setCountryCode(getCountryConfig(resolvedCountryCode).code);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.localStorage.setItem(COUNTRY_STORAGE_KEY, countryCode);
+  }, [countryCode]);
 
   // Randomize theme on data change
   useEffect(() => {
@@ -390,6 +413,22 @@ const App = () => {
         9. CRITICAL EXCEPTION - TURKISH OUTPUT: When 'isFinal' is true, the items in the 'recommendations' array MUST be specific gift product names translated into TURKISH. This is the ONLY place Turkish is allowed. Example: Return "Kablosuz Kulaklık" instead of "Wireless Headphones".
       `;
 
+      const localizedRecommendationRule = countryConfig.searchLanguage === 'English'
+        ? "Override any previous final-language instruction. When 'isFinal' is true, the items in the 'recommendations' array MUST be specific gift product names in ENGLISH so they search cleanly on the selected retailers."
+        : `Override any previous final-language instruction. When 'isFinal' is true, the items in the 'recommendations' array MUST be specific gift product names in ${countryConfig.searchLanguage}. This is the ONLY place non-English is allowed, because the selected shopping country is ${countryConfig.name}.`;
+
+      const effectiveSystemInstruction = `
+        ${systemInstruction}
+
+        Shopping Context:
+        - Shopping Country: ${countryConfig.name}
+        - Shopping Retailers: ${retailerNames}
+        - Final Recommendation Language: ${countryConfig.searchLanguage}
+
+        ${localizedRecommendationRule}
+        Favor gift ideas that are easy to find on ${retailerNames} in ${countryConfig.name}.
+      `;
+
       let userPrompt = initialPrompt;
       if (!userPrompt) {
         userPrompt = `Based on the conversation so far, determine the next step. History: ${JSON.stringify(currentHistory)}`;
@@ -399,7 +438,7 @@ const App = () => {
         MODEL_NAME,
         userPrompt,
         {
-          systemInstruction: systemInstruction,
+          systemInstruction: effectiveSystemInstruction,
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -409,7 +448,7 @@ const App = () => {
               isFinal: { type: Type.BOOLEAN },
               recommendations: { type: Type.ARRAY, items: { type: Type.STRING } }
             },
-            required: ["question", "options", "isFinal"]
+            required: ["question", "options", "isFinal", "recommendations"]
           }
         }
       );
@@ -498,6 +537,8 @@ const App = () => {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '1rem',
         zIndex: 10
       }}>
         <h1
@@ -514,69 +555,99 @@ const App = () => {
           gifty<span style={{ color: theme.accent }}>.</span>
         </h1>
 
-        {appState !== 'intro' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div
-              style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
-              onMouseEnter={() => setShowInfo(true)}
-              onMouseLeave={() => setShowInfo(false)}
-            >
-              <div style={{
-                cursor: 'help',
-                opacity: 0.6,
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 700, letterSpacing: '0.06em', opacity: 0.65, textTransform: 'uppercase' }}>
+              Shop in
+            </span>
+            <select
+              value={countryCode}
+              onChange={(e) => setCountryCode(e.target.value)}
+              style={{
+                backgroundColor: theme.secondary,
                 color: theme.text,
-                transition: 'opacity 0.1s'
+                border: 'none',
+                borderRadius: '999px',
+                padding: '0.8rem 1rem',
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
+                outline: 'none',
+                cursor: 'pointer'
               }}
+            >
+              {COUNTRY_OPTIONS.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {appState !== 'intro' && (
+            <>
+              <div
+                style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
+                onMouseEnter={() => setShowInfo(true)}
+                onMouseLeave={() => setShowInfo(false)}
+              >
+                <div style={{
+                  cursor: 'help',
+                  opacity: 0.6,
+                  color: theme.text,
+                  transition: 'opacity 0.1s'
+                }}
+                  onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                  onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
+                >
+                  <InfoIcon />
+                </div>
+
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: '10px',
+                  backgroundColor: theme.text,
+                  color: theme.bg,
+                  padding: '10px 14px',
+                  borderRadius: '12px',
+                  fontSize: '0.85rem',
+                  width: '220px',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                  opacity: showInfo ? 1 : 0,
+                  visibility: showInfo ? 'visible' : 'hidden',
+                  transition: 'opacity 0.2s, visibility 0.2s',
+                  zIndex: 20,
+                  pointerEvents: 'none',
+                  textAlign: 'center',
+                  lineHeight: 1.4,
+                  fontWeight: 500
+                }}>
+                  Tip: Use the text box to combine options or add details. You can also switch countries any time.
+                </div>
+              </div>
+
+              <button
+                onClick={handleReset}
+                aria-label="Restart"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: theme.text,
+                  cursor: 'pointer',
+                  padding: '8px',
+                  opacity: 0.6,
+                  transition: 'opacity 0.1s'
+                }}
                 onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
                 onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
               >
-                <InfoIcon />
-              </div>
-
-              <div style={{
-                position: 'absolute',
-                top: '100%',
-                right: 0,
-                marginTop: '10px',
-                backgroundColor: theme.text,
-                color: theme.bg,
-                padding: '10px 14px',
-                borderRadius: '12px',
-                fontSize: '0.85rem',
-                width: '200px',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
-                opacity: showInfo ? 1 : 0,
-                visibility: showInfo ? 'visible' : 'hidden',
-                transition: 'opacity 0.2s, visibility 0.2s',
-                zIndex: 20,
-                pointerEvents: 'none',
-                textAlign: 'center',
-                lineHeight: 1.4,
-                fontWeight: 500
-              }}>
-                Tip: Use the text box to combine options or add details.
-              </div>
-            </div>
-
-            <button
-              onClick={handleReset}
-              aria-label="Restart"
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: theme.text,
-                cursor: 'pointer',
-                padding: '8px',
-                opacity: 0.6,
-                transition: 'opacity 0.1s'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-              onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
-            >
-              <RefreshIcon />
-            </button>
-          </div>
-        )}
+                <RefreshIcon />
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <div ref={containerRef} style={{ width: '100%', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -591,6 +662,9 @@ const App = () => {
                 <p style={{ fontSize: '1.2rem', opacity: 0.8, maxWidth: '600px', lineHeight: 1.6, margin: '0 auto' }}>
                   Gifty asks you a few simple questions to understand who you're buying for.
                   Within 7 steps, we'll curate a list of personalized recommendations just for you.
+                </p>
+                <p style={{ fontSize: '0.95rem', opacity: 0.65, marginTop: '1rem' }}>
+                  Auto-detected shopping country: <strong>{countryConfig.name}</strong>. Change it anytime above.
                 </p>
               </div>
 
@@ -815,49 +889,68 @@ const App = () => {
                 Perfect Picks
               </h2>
               <p className="stagger-in" style={{ marginBottom: '3rem', opacity: 0.7, fontSize: '1.2rem' }}>
-                Tap a bubble to shop.
+                Shopping in {countryConfig.name}. Search across {retailerNames}.
               </p>
 
               <div style={{
                 width: '100%',
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: '1.5rem',
+                display: 'grid',
+                gap: '1rem',
                 marginBottom: '3rem',
-                justifyContent: 'center'
+                justifyItems: 'stretch'
               }}>
                 {data.recommendations?.map((gift, idx) => {
-                  const retailer = RETAILERS[idx % RETAILERS.length];
                   return (
-                    <a
-                      key={idx}
-                      href={retailer.url(gift)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="stagger-in wiggle-bubble"
+                    <div
+                      key={`${gift}-${idx}`}
+                      className="stagger-in"
                       style={{
                         ...cardStyle,
-                        padding: '1.2rem 2rem',
-                        borderRadius: '50px', // Pill/Bubble shape
+                        padding: '1.4rem',
+                        borderRadius: '24px',
                         display: 'flex',
-                        alignItems: 'center',
-                        fontSize: '1.1rem',
-                        fontWeight: 500,
-                        textDecoration: 'none',
-                        cursor: 'pointer',
-                        transformOrigin: 'center center',
-                        whiteSpace: 'nowrap'
-                      }}
-                      onMouseEnter={(e) => {
-                        gsap.to(e.currentTarget, { scale: 1.1, backgroundColor: theme.primary, color: theme.bg, duration: 0.2 });
-                      }}
-                      onMouseLeave={(e) => {
-                        gsap.to(e.currentTarget, { scale: 1, backgroundColor: theme.secondary, color: theme.text, duration: 0.2 });
+                        flexDirection: 'column',
+                        gap: '1rem',
+                        width: '100%'
                       }}
                     >
-                      {gift}
-                      <ExternalLinkIcon />
-                    </a>
+                      <div style={{ fontSize: '1.15rem', fontWeight: 700, lineHeight: 1.4 }}>
+                        {gift}
+                      </div>
+
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+                        {countryConfig.retailers.map((retailer) => (
+                          <a
+                            key={`${gift}-${retailer.name}`}
+                            href={buildRetailerSearchUrl(retailer.searchUrl, gift)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="wiggle-bubble"
+                            style={{
+                              textDecoration: 'none',
+                              backgroundColor: theme.bg,
+                              color: theme.text,
+                              borderRadius: '999px',
+                              padding: '0.8rem 1rem',
+                              fontSize: '0.95rem',
+                              fontWeight: 600,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
+                            }}
+                            onMouseEnter={(e) => {
+                              gsap.to(e.currentTarget, { scale: 1.05, backgroundColor: theme.primary, color: theme.bg, duration: 0.15 });
+                            }}
+                            onMouseLeave={(e) => {
+                              gsap.to(e.currentTarget, { scale: 1, backgroundColor: theme.bg, color: theme.text, duration: 0.15 });
+                            }}
+                          >
+                            {retailer.name}
+                            <ExternalLinkIcon />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
