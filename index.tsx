@@ -162,6 +162,51 @@ const buildSecondStepForRecipient = (recipient: string): StepResponse => {
   };
 };
 
+const OPTION_LABEL_SHORTCUTS: Record<string, string> = {
+  'family member': 'Family',
+  'best friend': 'Friend',
+  'close friend': 'Friend',
+  'romantic partner': 'Partner',
+  'significant other': 'Partner',
+  'work colleague': 'Colleague',
+  'co-worker': 'Colleague',
+  'coworker': 'Colleague',
+  'mother / father': 'Parent',
+  'mom / dad': 'Parent',
+  'brother / sister': 'Sibling',
+  'son / daughter': 'Child',
+  'baby / puppy / kitten': 'Baby'
+};
+
+const getCompactOptionLabel = (option: string) => {
+  const withoutExamples = option.replace(/\s*\([^)]*\)\s*/g, '').trim();
+  const normalized = withoutExamples.replace(/\s+/g, ' ').trim();
+  const directMatch = OPTION_LABEL_SHORTCUTS[normalized.toLowerCase()];
+
+  if (directMatch) {
+    return directMatch;
+  }
+
+  if (normalized.includes(' / ') && normalized.length > 18) {
+    return normalized.split(' / ')[0].trim();
+  }
+
+  if (normalized.length <= 18) {
+    return normalized;
+  }
+
+  const beforeSeparator = normalized.split(/[:,-]/)[0]?.trim();
+  if (beforeSeparator && beforeSeparator.length <= 18) {
+    return beforeSeparator;
+  }
+
+  return normalized
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .join(' ');
+};
+
 async function generateContentWithRetry(
   modelName: string,
   prompt: string,
@@ -408,6 +453,8 @@ const App = () => {
         4. Progressively narrow down interests and personality.
         5. STRICTLY PROHIBITED: Do not ask any questions about price, budget, or money. Assume budget is flexible.
         6. Provide 8-12 concise, distinct answer options in ENGLISH for every question.
+        6a. Every option must be a very short button label, ideally 1-2 words and never more than 3 words.
+        6b. Do not include parentheses, examples, slash-separated lists, or explanatory text inside options.
         7. If you have sufficient data OR Current Question >= 7, set 'isFinal' to true and provide 6-10 curated recommendations.
         8. If 'isFinal' is true, set 'question' to a concluding phrase in ENGLISH like "Here are some curated ideas." and keep options empty.
         9. CRITICAL EXCEPTION - TURKISH OUTPUT: When 'isFinal' is true, the items in the 'recommendations' array MUST be specific gift product names translated into TURKISH. This is the ONLY place Turkish is allowed. Example: Return "Kablosuz Kulaklık" instead of "Wireless Headphones".
@@ -798,35 +845,40 @@ const App = () => {
                 maxWidth: '800px',
                 marginBottom: '2rem'
               }}>
-                {data.options.map((option, idx) => (
-                  <button
-                    key={idx}
-                    className="stagger-in"
-                    onClick={() => handleAnswer(option)}
-                    style={{
-                      ...cardStyle,
-                      padding: '1.25rem',
-                      fontWeight: 500,
-                      cursor: 'pointer',
-                      fontSize: '1rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      textAlign: 'center',
-                      backgroundColor: theme.secondary,
-                      color: theme.text,
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
-                    }}
-                    onMouseEnter={(e) => {
-                      gsap.to(e.currentTarget, { scale: 1.02, backgroundColor: theme.primary, color: theme.bg, duration: 0.1 });
-                    }}
-                    onMouseLeave={(e) => {
-                      gsap.to(e.currentTarget, { scale: 1, backgroundColor: theme.secondary, color: theme.text, duration: 0.1 });
-                    }}
-                  >
-                    {option}
-                  </button>
-                ))}
+                {data.options.map((option, idx) => {
+                  const compactLabel = getCompactOptionLabel(option);
+
+                  return (
+                    <button
+                      key={idx}
+                      className="stagger-in"
+                      onClick={() => handleAnswer(option)}
+                      title={option}
+                      style={{
+                        ...cardStyle,
+                        padding: '1.25rem',
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        fontSize: '1rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        textAlign: 'center',
+                        backgroundColor: theme.secondary,
+                        color: theme.text,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
+                      }}
+                      onMouseEnter={(e) => {
+                        gsap.to(e.currentTarget, { scale: 1.02, backgroundColor: theme.primary, color: theme.bg, duration: 0.1 });
+                      }}
+                      onMouseLeave={(e) => {
+                        gsap.to(e.currentTarget, { scale: 1, backgroundColor: theme.secondary, color: theme.text, duration: 0.1 });
+                      }}
+                    >
+                      {compactLabel}
+                    </button>
+                  );
+                })}
               </div>
 
               <form
